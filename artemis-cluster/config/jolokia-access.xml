@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  jolokia-access.xml — Jolokia JMX API 访问控制
+  生产环境: 严格限制来源 IP，仅允许监控系统访问
+-->
+<restrict>
+
+  <!-- 允许来源 (生产环境替换为实际监控服务器 IP) -->
+  <remote>
+    <host>127.0.0.1</host>
+    <host>172.28.0.0/24</host>    <!-- Docker 内部网络 -->
+    <!-- <host>10.0.1.50</host>   监控服务器 IP -->
+  </remote>
+
+  <!-- 允许的 HTTP 方法 -->
+  <http>
+    <method>get</method>
+    <method>post</method>
+  </http>
+
+  <!-- 禁止的 MBean 操作 (安全加固) -->
+  <deny>
+    <mbean>
+      <name>com.sun.management:type=DiagnosticCommand</name>
+      <operation>*</operation>
+    </mbean>
+    <mbean>
+      <name>com.sun.management:type=HotSpotDiagnostic</name>
+      <operation>dumpHeap</operation>
+    </mbean>
+  </deny>
+
+  <!-- 允许的 MBean (白名单模式，注释此块以允许全部) -->
+  <!-- <allow>
+    <mbean>
+      <name>org.apache.activemq.artemis:*</name>
+      <attribute>*</attribute>
+      <operation>*</operation>
+    </mbean>
+    <mbean>
+      <name>java.lang:*</name>
+      <attribute>*</attribute>
+    </mbean>
+  </allow> -->
+
+</restrict>

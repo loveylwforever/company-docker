@@ -1,0 +1,209 @@
+<?xml version='1.0'?>
+<!--
+  broker-primary.xml — 主节点生产配置
+  HA 模式: replication (无需共享存储，推荐 Docker 环境使用)
+-->
+<configuration xmlns="urn:activemq"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
+
+  <core xmlns="urn:activemq:core"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="urn:activemq:core">
+
+    <!-- ================================================================== -->
+    <!-- 基础标识                                                              -->
+    <!-- ================================================================== -->
+    <name>artemis-primary</name>
+
+    <!-- 持久化目录 -->
+    <paging-directory>/var/lib/artemis-instance/data/paging</paging-directory>
+    <bindings-directory>/var/lib/artemis-instance/data/bindings</bindings-directory>
+    <journal-directory>/var/lib/artemis-instance/data/journal</journal-directory>
+    <large-messages-directory>/var/lib/artemis-instance/data/large-messages</large-messages-directory>
+
+    <!-- ================================================================== -->
+    <!-- 日志 (Journal) 优化 — 生产环境使用 ASYNCIO                            -->
+    <!-- ================================================================== -->
+    <journal-type>ASYNCIO</journal-type>
+    <journal-datasync>true</journal-datasync>
+    <journal-min-files>2</journal-min-files>
+    <journal-pool-files>10</journal-pool-files>
+    <journal-device-block-size>4096</journal-device-block-size>
+    <journal-file-size>10M</journal-file-size>
+    <journal-buffer-timeout>500000</journal-buffer-timeout>
+    <journal-max-io>4096</journal-max-io>
+
+    <!-- ================================================================== -->
+    <!-- 网络连接器                                                             -->
+    <!-- ================================================================== -->
+    <connectors>
+      <!-- 本节点自身连接器 (集群内部通信用) -->
+      <connector name="primary-connector">tcp://artemis-primary:61616</connector>
+      <!-- 备节点连接器 -->
+      <connector name="backup-connector">tcp://artemis-backup:61616</connector>
+    </connectors>
+
+    <!-- ================================================================== -->
+    <!-- 接受器 (Acceptors) — 多协议                                            -->
+    <!-- ================================================================== -->
+    <acceptors>
+      <!-- 主协议接受器: OpenWire + Core + AMQP + STOMP + MQTT 复用 61616 -->
+      <acceptor name="artemis">
+        tcp://0.0.0.0:61616?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;amqpMinLargeMessageSize=102400;protocols=CORE,AMQP,STOMP,HORNETQ,MQTT,OPENWIRE;useEpoll=true;amqpCredits=1000;amqpLowCredits=300;amqpDuplicateDetection=true;supportAdvisory=false;suppressInternalManagementObjects=false
+      </acceptor>
+
+      <!-- 独立 AMQP 接受器 -->
+      <acceptor name="amqp">
+        tcp://0.0.0.0:5672?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=AMQP;useEpoll=true;amqpCredits=1000;amqpLowCredits=300
+      </acceptor>
+
+      <!-- 独立 STOMP 接受器 -->
+      <acceptor name="stomp">
+        tcp://0.0.0.0:61613?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=STOMP;useEpoll=true
+      </acceptor>
+
+      <!-- 独立 MQTT 接受器 -->
+      <acceptor name="mqtt">
+        tcp://0.0.0.0:1883?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=MQTT;useEpoll=true
+      </acceptor>
+    </acceptors>
+
+    <!-- ================================================================== -->
+    <!-- HA — Replication 模式 (主节点)                                        -->
+    <!-- ================================================================== -->
+    <ha-policy>
+      <replication>
+        <primary>
+          <check-for-live-server>true</check-for-live-server>
+          <quorum-size>1</quorum-size>
+        </primary>
+      </replication>
+    </ha-policy>
+
+    <!-- ================================================================== -->
+    <!-- 集群配置                                                              -->
+    <!-- ================================================================== -->
+    <cluster-user>clusterUser</cluster-user>
+    <cluster-password>${ARTEMIS_CLUSTER_PASSWORD}</cluster-password>
+
+    <broadcast-groups>
+      <broadcast-group name="bg-group1">
+        <group-address>231.7.7.7</group-address>
+        <group-port>9876</group-port>
+        <broadcast-period>5000</broadcast-period>
+        <connector-ref>primary-connector</connector-ref>
+      </broadcast-group>
+    </broadcast-groups>
+
+    <discovery-groups>
+      <discovery-group name="dg-group1">
+        <group-address>231.7.7.7</group-address>
+        <group-port>9876</group-port>
+        <refresh-timeout>10000</refresh-timeout>
+      </discovery-group>
+    </discovery-groups>
+
+    <cluster-connections>
+      <cluster-connection name="my-cluster">
+        <connector-ref>primary-connector</connector-ref>
+        <retry-interval>500</retry-interval>
+        <use-duplicate-detection>true</use-duplicate-detection>
+        <message-load-balancing>ON_DEMAND</message-load-balancing>
+        <max-hops>1</max-hops>
+        <discovery-group-ref discovery-group-name="dg-group1"/>
+      </cluster-connection>
+    </cluster-connections>
+
+    <!-- ================================================================== -->
+    <!-- 安全配置                                                              -->
+    <!-- ================================================================== -->
+    <security-enabled>true</security-enabled>
+    <security-invalidation-interval>10000</security-invalidation-interval>
+
+    <security-settings>
+      <security-setting match="#">
+        <!-- admin 具有全部权限 -->
+        <permission type="createNonDurableQueue"  roles="admin,producer"/>
+        <permission type="deleteNonDurableQueue"  roles="admin"/>
+        <permission type="createDurableQueue"     roles="admin,producer"/>
+        <permission type="deleteDurableQueue"     roles="admin"/>
+        <permission type="createAddress"          roles="admin,producer"/>
+        <permission type="deleteAddress"          roles="admin"/>
+        <permission type="consume"                roles="admin,consumer"/>
+        <permission type="browse"                 roles="admin,monitor"/>
+        <permission type="send"                   roles="admin,producer"/>
+        <permission type="manage"                 roles="admin"/>
+      </security-setting>
+    </security-settings>
+
+    <!-- ================================================================== -->
+    <!-- 地址 & 队列设置                                                        -->
+    <!-- ================================================================== -->
+    <address-settings>
+      <!-- 默认策略 -->
+      <address-setting match="#">
+        <dead-letter-address>DLQ</dead-letter-address>
+        <expiry-address>ExpiryQueue</expiry-address>
+        <redelivery-delay>5000</redelivery-delay>
+        <redelivery-multiplier>2.0</redelivery-multiplier>
+        <max-redelivery-delay>60000</max-redelivery-delay>
+        <max-delivery-attempts>5</max-delivery-attempts>
+        <max-size-bytes>104857600</max-size-bytes>   <!-- 100 MB -->
+        <max-size-messages>-1</max-size-messages>
+        <page-size-bytes>10485760</page-size-bytes>  <!-- 10 MB -->
+        <message-counter-history-day-limit>10</message-counter-history-day-limit>
+        <address-full-policy>PAGE</address-full-policy>
+        <auto-create-queues>true</auto-create-queues>
+        <auto-delete-queues>false</auto-delete-queues>
+        <auto-create-addresses>true</auto-create-addresses>
+        <auto-delete-addresses>false</auto-delete-addresses>
+        <config-delete-queues>OFF</config-delete-queues>
+        <config-delete-addresses>OFF</config-delete-addresses>
+      </address-setting>
+
+      <!-- 内部系统队列豁免 -->
+      <address-setting match="activemq.management#">
+        <max-delivery-attempts>-1</max-delivery-attempts>
+      </address-setting>
+    </address-settings>
+
+    <!-- ================================================================== -->
+    <!-- 预定义地址                                                             -->
+    <!-- ================================================================== -->
+    <addresses>
+      <address name="DLQ">
+        <anycast>
+          <queue name="DLQ"/>
+        </anycast>
+      </address>
+      <address name="ExpiryQueue">
+        <anycast>
+          <queue name="ExpiryQueue"/>
+        </anycast>
+      </address>
+    </addresses>
+
+    <!-- ================================================================== -->
+    <!-- 性能调优                                                              -->
+    <!-- ================================================================== -->
+    <thread-pool-max-size>30</thread-pool-max-size>
+    <scheduled-thread-pool-max-size>5</scheduled-thread-pool-max-size>
+    <global-max-size>536870912</global-max-size>  <!-- 512 MB -->
+    <global-max-messages>-1</global-max-messages>
+
+    <!-- 消息计数器 (Console 图表支持) -->
+    <message-counter-enabled>true</message-counter-enabled>
+    <message-counter-sample-period>10000</message-counter-sample-period>
+    <message-counter-max-day-history>10</message-counter-max-day-history>
+
+    <!-- 连接 TTL -->
+    <connection-ttl-override>-1</connection-ttl-override>
+    <connection-ttl-check-period>2000</connection-ttl-check-period>
+
+    <!-- 管理接口 -->
+    <management-address>activemq.management</management-address>
+    <management-notification-address>activemq.notifications</management-notification-address>
+
+  </core>
+</configuration>

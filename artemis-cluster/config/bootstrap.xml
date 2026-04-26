@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  bootstrap.xml — Web 控制台启动配置
+  关键: 图标显示正常的核心配置在于:
+    1. app-root 必须与反向代理 location 路径一致
+    2. hawtconfig.json 中 disabledRoutes 不能屏蔽静态资源
+    3. bind 地址要明确为 0.0.0.0
+-->
+<broker xmlns="http://activemq.apache.org/schema">
+
+  <jaas-security domain="activemq"/>
+
+  <!-- 核心消息服务 -->
+  <server configuration="file:/var/lib/artemis-instance/etc/broker.xml"/>
+
+  <!-- Web 控制台配置 -->
+  <web path="web" bind="http://0.0.0.0:8161">
+
+    <!--
+      app-root: 控制台 URL 根路径。
+      若通过 Nginx 反向代理，此处必须与 proxy_pass 上游路径一致，
+      通常保持默认 "" (空) 即可；若 nginx 有前缀，则对应填写。
+
+      图标加载失败的根因: hawtio 通过相对路径加载 font/图标资源，
+      当 context root 不匹配时资源 404。
+      解决方案: 在 nginx 中保持路径透传，不改写前缀。
+    -->
+    <app url="console"
+         war="console.war"
+         role="guest"
+         arg="hawtconfig=/var/lib/artemis-instance/etc/hawtconfig.json"/>
+
+    <!-- Jolokia REST API (供 JMX 监控使用) -->
+    <app url="jolokia"
+         war="jolokia-war-2.1.1.war"/>
+
+    <!-- ActiveMQ Artemis REST API -->
+    <app url="activemq-rest"
+         war="artemis-rest.war"/>
+
+  </web>
+
+</broker>

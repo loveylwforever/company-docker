@@ -1,0 +1,25 @@
+services:
+  artemis:
+    image: apache/activemq-artemis:2.42.0-alpine
+    container_name: artemis
+    restart: always
+    environment:
+      ARTEMIS_USER: admin
+      ARTEMIS_PASSWORD: Artemis@2026
+      ARTEMIS_ROLE: admin
+      JAVA_OPTS: >-
+        -Xms512m -Xmx1g
+        -XX:+UseG1GC
+        -Dhawtio.disableProxy=false
+        -Dhawtio.realm=activemq
+        -Dhawtio.offline=true
+    ports:
+      - "8161:8161"   # 控制台
+      - "61616:61616" # JMS 连接
+      - "5672:5672"   # AMQP 协议
+    volumes:
+      - ./artemis-data:/var/lib/artemis/data
+    deploy:
+      resources:
+        limits:
+          memory: 2G

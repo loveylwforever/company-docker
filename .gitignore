@@ -1,0 +1,10 @@
+# 数据库数据目录 - 绝对不要提交
+postgres/postgres_data/
+redis/redis-data/
+
+# 其他常见忽略项
+.DS_Store
+*.log
+*.tmp
+.env
+.env.local

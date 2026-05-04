@@ -3,3 +3,11 @@ certs/
 data/
 logs/
 *.hprof
+
+# Build outputs
+target/
+**/target/
+
+# Data files/directories
+**/data/
+*.data

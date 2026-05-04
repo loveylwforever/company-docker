@@ -8,3 +8,12 @@ redis/redis-data/
 *.tmp
 .env
 .env.local
+
+# Build outputs
+target/
+**/target/
+
+# Data files/directories
+data/
+**/data/
+*.data

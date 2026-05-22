@@ -1,0 +1,54 @@
+<?xml version='1.0'?>
+<!--
+  本地开发 broker 配置（由 docker-compose 挂载到 etc-override，首次 artemis create 时复制到 etc/）。
+  开启 auto-create，供 auth / auth-channel 连接时自动创建 {渠道}_MQ / _ret / _broadcast。
+-->
+<configuration xmlns="urn:activemq"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
+
+  <core xmlns="urn:activemq:core"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="urn:activemq:core">
+
+    <name>artemis-dev</name>
+
+    <paging-directory>data/paging</paging-directory>
+    <bindings-directory>data/bindings</bindings-directory>
+    <journal-directory>data/journal</journal-directory>
+    <large-messages-directory>data/large-messages</large-messages-directory>
+
+    <acceptors>
+      <acceptor name="artemis">tcp://0.0.0.0:61616</acceptor>
+      <acceptor name="amqp">tcp://0.0.0.0:5672?protocols=AMQP</acceptor>
+    </acceptors>
+
+    <security-enabled>true</security-enabled>
+
+    <security-settings>
+      <!-- 镜像默认 amq=admin；同时保留 admin 角色便于与 ARTEMIS_ROLE 对齐 -->
+      <security-setting match="#">
+        <permission type="createNonDurableQueue" roles="amq,admin"/>
+        <permission type="createDurableQueue" roles="amq,admin"/>
+        <permission type="createAddress" roles="amq,admin"/>
+        <permission type="deleteNonDurableQueue" roles="amq,admin"/>
+        <permission type="deleteDurableQueue" roles="amq,admin"/>
+        <permission type="deleteAddress" roles="amq,admin"/>
+        <permission type="consume" roles="amq,admin"/>
+        <permission type="browse" roles="amq,admin"/>
+        <permission type="send" roles="amq,admin"/>
+        <permission type="manage" roles="amq,admin"/>
+      </security-setting>
+    </security-settings>
+
+    <address-settings>
+      <address-setting match="#">
+        <auto-create-addresses>true</auto-create-addresses>
+        <auto-create-queues>true</auto-create-queues>
+        <auto-delete-queues>false</auto-delete-queues>
+        <auto-delete-addresses>false</auto-delete-addresses>
+      </address-setting>
+    </address-settings>
+
+  </core>
+</configuration>

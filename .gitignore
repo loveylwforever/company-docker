@@ -13,6 +13,10 @@ redis/redis-data/
 target/
 **/target/
 
+# Artemis 本地实例数据（勿提交）
+activemq-artemis/artemis-instance/
+activemq-artemis/artemis-data/
+
 # Data files/directories
 data/
 **/data/

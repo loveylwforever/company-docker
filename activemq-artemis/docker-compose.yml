@@ -1,8 +1,17 @@
+# 本地开发 Artemis（与 company-auth-channel application.yml 默认账号一致）
+#
+# etc-override：官方镜像首次 artemis create 时，会把该目录下的文件复制到实例 etc/。
+# 修改 etc-override/broker.xml 后需删掉 artemis-instance 再 up，否则仍用旧 etc。
+#
+#   docker compose down
+#   rm -rf artemis-instance
+#   docker compose up -d
+#
 services:
   artemis:
     image: apache/activemq-artemis:2.42.0-alpine
     container_name: artemis
-    restart: always
+    restart: unless-stopped
     environment:
       ARTEMIS_USER: admin
       ARTEMIS_PASSWORD: Artemis@2026
@@ -15,10 +24,13 @@ services:
         -Dhawtio.offline=true
     ports:
       - "8161:8161"   # 控制台
-      - "61616:61616" # JMS 连接
-      - "5672:5672"   # AMQP 协议
+      - "61616:61616" # Core/JMS（auth、auth-channel）
+      - "5672:5672"   # AMQP
     volumes:
-      - ./artemis-data:/var/lib/artemis/data
+      # 整个 broker 实例（data + etc），便于本地持久化与重建
+      - ./artemis-instance:/var/lib/artemis-instance
+      # 首次创建时注入 broker.xml（auto-create + admin 权限）
+      - ./etc-override:/var/lib/artemis-instance/etc-override:ro
     deploy:
       resources:
         limits:

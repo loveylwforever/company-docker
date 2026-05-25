@@ -1,0 +1,185 @@
+# 在 company-docker 目录下启动（所有本地挂载均为 ./ 相对本目录）：
+#
+#   cd company-docker
+#   docker compose up -d --build
+#
+# Java 构建上下文为上级 company-parent；admin-dashboard 为 ../company-admin-dashboard
+
+name: company-stack
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: company-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TZ: Asia/Shanghai
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./postgres/postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+      - ../company-sql/postgres/schema-company-auth.sql:/schema/schema-company-auth.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - company-net
+
+  redis:
+    image: redis:8.0-alpine
+    container_name: company-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+    command: >
+      sh -c 'redis-server
+      --requirepass "$$REDIS_PASSWORD"
+      --appendonly yes
+      --save 60 100
+      --protected-mode no'
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./redis/redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - company-net
+
+  artemis:
+    image: apache/activemq-artemis:2.42.0-alpine
+    container_name: company-artemis
+    restart: unless-stopped
+    environment:
+      ARTEMIS_USER: ${MQ_USERNAME:-admin}
+      ARTEMIS_PASSWORD: ${MQ_PASSWORD:-Artemis@2026}
+      ARTEMIS_ROLE: admin
+      JAVA_OPTS: -Xms512m -Xmx1g -XX:+UseG1GC
+      TZ: Asia/Shanghai
+    ports:
+      - "${ARTEMIS_CONSOLE_PORT:-8161}:8161"
+      - "${ARTEMIS_CORE_PORT:-61616}:61616"
+      - "${ARTEMIS_AMQP_PORT:-5672}:5672"
+    volumes:
+      - ./activemq-artemis/artemis-instance:/var/lib/artemis-instance
+      - ./activemq-artemis/etc-override:/var/lib/artemis-instance/etc-override:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8161 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 45s
+    networks:
+      - company-net
+
+  auth:
+    build:
+      context: ..
+      dockerfile: company-docker/images/company-auth/Dockerfile
+    image: company-auth:local
+    container_name: company-auth
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      artemis:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: ${AUTH_SPRING_PROFILES_ACTIVE:-prod}
+      LOGGING_FILE_PATH: /var/log/auth
+      SERVER_PORT: "8080"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/company_auth
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      COMPANY_AUTH_REDIS_ADDRESS: redis://redis:6379
+      COMPANY_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      COMPANY_AUTH_MQ_BROKER_URL: tcp://artemis:61616
+      COMPANY_AUTH_MQ_USERNAME: ${MQ_USERNAME:-admin}
+      COMPANY_AUTH_MQ_PASSWORD: ${MQ_PASSWORD:-Artemis@2026}
+      FAIL_INSERT_TRANS_INFO_DIR: /var/lib/company-auth/fail-insert-trans-info
+      CHANNEL_PLUGIN_HOME: /opt/channel-plugin
+    ports:
+      - "${AUTH_PORT:-8080}:8080"
+    volumes:
+      - ./auth/fail-insert:/var/lib/company-auth/fail-insert-trans-info
+      - ./auth/logs:/var/log/auth
+      - ../tools/channel-plugin:/opt/channel-plugin:ro
+    networks:
+      - company-net
+
+  auth-channel:
+    build:
+      context: ..
+      dockerfile: company-docker/images/company-auth-channel/Dockerfile
+    image: company-auth-channel:local
+    container_name: company-auth-channel
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      artemis:
+        condition: service_healthy
+      auth:
+        condition: service_started
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: ${CHANNEL_SPRING_PROFILES_ACTIVE:-prod}
+      LOGGING_FILE_PATH: /var/log/company-auth-channel
+      SERVER_PORT: "8090"
+      CHANNEL_DB_URL: jdbc:postgresql://postgres:5432/company_auth
+      CHANNEL_DB_USER: postgres
+      CHANNEL_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      MQ_BROKER_URL: tcp://artemis:61616
+      MQ_USERNAME: ${MQ_USERNAME:-admin}
+      MQ_PASSWORD: ${MQ_PASSWORD:-Artemis@2026}
+      CHANNEL_PLUGIN_ARTIFACT_BASE_DIR: /data/plugins
+    ports:
+      - "${AUTH_CHANNEL_PORT:-8090}:8090"
+    volumes:
+      - ./auth-channel/plugins:/data/plugins
+      - ./auth-channel/logs:/var/log/company-auth-channel
+    networks:
+      - company-net
+
+  admin-dashboard:
+    build:
+      context: ..
+      dockerfile: company-docker/images/admin-dashboard/Dockerfile
+    image: admin-dashboard:local
+    container_name: company-admin-dashboard
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth:
+        condition: service_started
+      auth-channel:
+        condition: service_started
+    environment:
+      TZ: Asia/Shanghai
+      HOST: 0.0.0.0
+      PORT: "3000"
+      NUXT_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/company_auth
+      NUXT_AUTH_API_BASE: http://auth:8080
+      NUXT_CHANNEL_RELEASE_API_BASE: http://auth-channel:8090
+    ports:
+      - "${ADMIN_DASHBOARD_PORT:-3000}:3000"
+    networks:
+      - company-net
+
+networks:
+  company-net:
+    driver: bridge

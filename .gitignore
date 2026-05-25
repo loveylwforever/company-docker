@@ -1,23 +1,19 @@
-# 数据库数据目录 - 绝对不要提交
+# 本地数据与运行时目录（均在 company-docker 下 ./ 挂载）
 postgres/postgres_data/
 redis/redis-data/
+activemq-artemis/artemis-instance/
+activemq-artemis/artemis-data/
+auth/fail-insert/
+auth/logs/
+auth-channel/plugins/
+auth-channel/logs/
 
-# 其他常见忽略项
 .DS_Store
 *.log
 *.tmp
 .env
 .env.local
 
-# Build outputs
+# Build outputs（镜像构建在上级 company-parent）
 target/
 **/target/
-
-# Artemis 本地实例数据（勿提交）
-activemq-artemis/artemis-instance/
-activemq-artemis/artemis-data/
-
-# Data files/directories
-data/
-**/data/
-*.data

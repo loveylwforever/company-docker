@@ -11,21 +11,28 @@
 - 适合把「开发用 broker.xml」版本化进 Git（本目录 `etc-override/broker.xml`）。
 - **改完 broker.xml 后**，若已有旧的 `artemis-instance/`，需要删掉该目录再 `docker compose up`，否则会沿用旧 `etc/`。
 
-## 启动
+## 启动（统一栈）
+
+在 **company-docker** 目录：
 
 ```bash
-cd company-docker/activemq-artemis
+cd company-docker
+docker compose up -d artemis
+# 或一次启动全部服务
 docker compose up -d
 ```
 
 控制台：http://127.0.0.1:8161 ，`admin` / `Artemis@2026`
 
+本地数据目录：`./artemis-instance`（compose 中挂载为 `./activemq-artemis/artemis-instance`）。
+
 ## 修改 broker 配置后重建
 
 ```bash
-docker compose down
-rm -rf artemis-instance
-docker compose up -d
+cd company-docker
+docker compose stop artemis
+rm -rf ./activemq-artemis/artemis-instance
+docker compose up -d artemis
 ```
 
 ## 权限说明（auth 报 CREATE_DURABLE_QUEUE）
@@ -37,6 +44,5 @@ docker compose up -d
 
 ## 与业务对齐
 
-- JMS：`tcp://127.0.0.1:61616`
-- 每渠道三队列：`{channelCode}_MQ`、`{channelCode}_MQ_ret`、`{channelCode}_MQ_broadcast`
-- 渠道 **首次发布** 后 auth-channel worker 才会连 MQ 并触发 auto-create（需 broker 已开 auto-create）
+- JMS：`tcp://127.0.0.1:61616`（容器内服务名 `artemis:61616`）
+- 账号：`admin` / `Artemis@2026`（与 `company-auth`、`company-auth-channel` 默认一致）

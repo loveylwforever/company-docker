@@ -53,6 +53,7 @@ docker compose up -d --build
 | Artemis Core | 61616 | JMS |
 | company-auth | 8080 | HTTP API |
 | company-auth-channel | 8090 | `GET /tools/channel/ping` |
+| company-manage | 8088 | 管理端安全登录 API（Sa-Token + Redis） |
 | admin-dashboard | 3000 | 管理台（Nuxt）；浏览器访问 http://127.0.0.1:3000 |
 
 ## 常用命令

@@ -10,4 +10,9 @@ EOSQL
 psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname company_auth \
   -f /schema/schema-company-auth.sql
 
+if [ -f /schema/schema-company-manage-security.sql ]; then
+  psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname company_auth \
+    -f /schema/schema-company-manage-security.sql
+fi
+
 echo "company_auth schema initialized"

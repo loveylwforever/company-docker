@@ -23,6 +23,7 @@ services:
       - ./postgres/postgres_data:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d:ro
       - ../company-sql/postgres/schema-company-auth.sql:/schema/schema-company-auth.sql:ro
+      - ../company-sql/postgres/schema-company-manage-security.sql:/schema/schema-company-manage-security.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
@@ -154,6 +155,33 @@ services:
     networks:
       - company-net
 
+  manage:
+    build:
+      context: ..
+      dockerfile: company-docker/images/company-manage/Dockerfile
+    image: company-manage:local
+    container_name: company-manage
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      MANAGE_DB_URL: jdbc:postgresql://postgres:5432/company_auth?currentSchema=manage
+      MANAGE_DB_USER: postgres
+      MANAGE_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      MANAGE_REDIS_HOST: redis
+      MANAGE_REDIS_PORT: "6379"
+      MANAGE_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+      MANAGE_REDIS_DATABASE: "1"
+      SECURITY_DEV_INIT_ADMIN: "true"
+    ports:
+      - "${COMPANY_MANAGE_PORT:-8088}:8088"
+    networks:
+      - company-net
+
   admin-dashboard:
     build:
       context: ..
@@ -168,6 +196,8 @@ services:
         condition: service_started
       auth-channel:
         condition: service_started
+      company-manage:
+        condition: service_started
     environment:
       TZ: Asia/Shanghai
       HOST: 0.0.0.0
@@ -175,6 +205,7 @@ services:
       NUXT_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/company_auth
       NUXT_AUTH_API_BASE: http://auth:8080
       NUXT_CHANNEL_RELEASE_API_BASE: http://auth-channel:8090
+      MANAGE_API_BASE: http://company-manage:8088
     ports:
       - "${ADMIN_DASHBOARD_PORT:-3000}:3000"
     networks:

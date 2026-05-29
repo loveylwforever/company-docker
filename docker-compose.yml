@@ -117,7 +117,7 @@ services:
     volumes:
       - ./auth/fail-insert:/var/lib/company-auth/fail-insert-trans-info
       - ./auth/logs:/var/log/auth
-      - ../tools/channel-plugin:/opt/channel-plugin:ro
+      - ../tools/channel-plugin:/opt/channel-plugin
     networks:
       - company-net
 
@@ -196,16 +196,17 @@ services:
         condition: service_started
       auth-channel:
         condition: service_started
-      company-manage:
+      manage:
         condition: service_started
     environment:
       TZ: Asia/Shanghai
       HOST: 0.0.0.0
       PORT: "3000"
-      NUXT_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/company_auth
-      NUXT_AUTH_API_BASE: http://auth:8080
-      NUXT_CHANNEL_RELEASE_API_BASE: http://auth-channel:8090
-      MANAGE_API_BASE: http://company-manage:8088
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/company_auth
+      AUTH_API_BASE: http://auth:8080
+      CHANNEL_RELEASE_API_BASE: http://auth-channel:8090
+      MANAGE_API_BASE: http://manage:8088
+      MANAGE_ENCRYPT_KEY: 1024lab__1024lab
     ports:
       - "${ADMIN_DASHBOARD_PORT:-3000}:3000"
     networks:

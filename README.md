@@ -85,9 +85,11 @@ docker compose up -d artemis
 
 容器内已通过环境变量对接后端：
 
-- `NUXT_AUTH_API_BASE` → `http://auth:8080`
-- `NUXT_CHANNEL_RELEASE_API_BASE` → `http://auth-channel:8090`
-- `NUXT_DATABASE_URL` → 同上 Postgres 库 `company_auth`
+- `AUTH_API_BASE` → `http://auth:8080`
+- `CHANNEL_RELEASE_API_BASE` → `http://auth-channel:8090`
+- `MANAGE_API_BASE` → `http://company-manage:8088`
+- `DATABASE_URL` → Postgres 库 `company_auth`
+- `MANAGE_ENCRYPT_KEY` → 与 `company-manage` 加密密钥保持一致
 
 浏览器访问 **http://127.0.0.1:3000**。渠道发布升级的 JAR 落盘目录为 `./auth-channel/plugins`（容器内 `/data/plugins`）。
 

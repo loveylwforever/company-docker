@@ -83,15 +83,27 @@ docker compose up -d artemis
 
 ## 管理台（admin-dashboard）
 
-容器内已通过环境变量对接后端：
+浏览器只访问 **http://127.0.0.1:3000**；Nitro 再按前缀转发（详见 [company-admin-dashboard/README.md](../company-admin-dashboard/README.md)）。
 
-- `AUTH_API_BASE` → `http://auth:8080`
-- `CHANNEL_RELEASE_API_BASE` → `http://auth-channel:8090`
-- `MANAGE_API_BASE` → `http://company-manage:8088`
-- `DATABASE_URL` → Postgres 库 `company_auth`
-- `MANAGE_ENCRYPT_KEY` → 与 `company-manage` 加密密钥保持一致
+### 容器环境变量 → BFF 前缀
 
-浏览器访问 **http://127.0.0.1:3000**。渠道发布升级的 JAR 落盘目录为 `./auth-channel/plugins`（容器内 `/data/plugins`）。
+| 环境变量 | 容器内典型值 | 浏览器路径前缀 | 上游 |
+|----------|--------------|----------------|------|
+| `DATABASE_URL` | `postgresql://postgres:...@postgres:5432/company_auth` | `/api/db/*` | PostgreSQL |
+| `AUTH_API_BASE` | `http://auth:8080` | `/api/auth/*` | company-auth |
+| `CHANNEL_RELEASE_API_BASE` | `http://auth-channel:8090` | `/api/channel-release/*` | company-auth-channel |
+| `MANAGE_API_BASE` | `http://manage:8088` | `/api/manage/*` | company-manage |
+| `MANAGE_ENCRYPT_KEY` | 与 manage 一致 | （前端 public 配置） | — |
+
+Nitro 服务端读取上游地址时**优先 `process.env`**，避免镜像构建期把 `127.0.0.1` 烘焙进 `runtimeConfig`。改 env 后请 `docker compose up -d --build admin-dashboard`。
+
+### company-auth 与渠道插件
+
+- `CHANNEL_PLUGIN_HOME=/opt/channel-plugin`（挂载 `../tools/channel-plugin`）
+- 镜像内已安装 `bash`、`zip`、`file`（`generate.sh` 需要；Alpine JRE 默认无 bash）
+- 管理台「生成插件包」：`POST /api/auth/tools/channel-plugin/generate` → auth `POST /tools/channel-plugin/generate`
+
+渠道发布 JAR 落盘：`./auth-channel/plugins`（容器内 `/data/plugins`）。
 
 ## 故障排查
 
@@ -122,11 +134,18 @@ docker compose restart auth
 同网段连通性自测（应返回 `PONG`）：
 
 ```bash
-docker run --rm --network company-stack_company-net redis:8.0-alpine \
+docker run --rm --network company-docker_company-net redis:8.0-alpine \
   redis-cli -h redis -a "123456" ping
 ```
 
-控制台里 Logback 的 `CONSOLE not referenced`、`Missing watchable` 在 `prod` 下属正常，不是崩溃原因。
+> 网络名以 `docker network ls` 为准（compose 项目名 + `_company-net`）。
+
+若仍见 Logback 的 `CONSOLE not referenced` / `Missing watchable`，请重建 `company-auth` 镜像（`logback-spring.xml` 已关闭 scan 且 prod 不注册 CONSOLE appender）。
+
+### 管理台接口 500 / `127.0.0.1` / `fetch failed`
+
+- **`DATABASE_URL` / `MANAGE_API_BASE` 等连到本机**：多为未重建 dashboard 或 env 未注入；确认 `docker exec company-admin-dashboard env | grep _API_BASE`。
+- **生成插件包 `Cannot run program "bash"`**：需重建 `company-auth` 镜像（Dockerfile 含 `apk add bash zip file`），并保证 `tools/channel-plugin` 挂载可写（生成 `workspaces/`、`dist/`）。
 
 ## 历史说明
 

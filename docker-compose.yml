@@ -169,6 +169,7 @@ services:
         condition: service_healthy
     environment:
       TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: ${MANAGE_SPRING_PROFILES_ACTIVE:-prod}
       MANAGE_DB_URL: jdbc:postgresql://postgres:5432/company_auth?currentSchema=manage
       MANAGE_DB_USER: postgres
       MANAGE_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -179,6 +180,8 @@ services:
       SECURITY_DEV_INIT_ADMIN: "true"
     ports:
       - "${COMPANY_MANAGE_PORT:-8088}:8088"
+    volumes:
+      - ./manage/logs:/var/log/company-manage
     networks:
       - company-net
 

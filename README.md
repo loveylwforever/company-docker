@@ -1,6 +1,6 @@
 # company-docker
 
-在 **本目录** 一键构建并启动：Postgres、Redis、Artemis、`company-auth`、`company-auth-channel`、`company-admin-dashboard`（admin-dashboard）。
+在 **本目录** 一键构建并启动：Postgres、Redis、Artemis、`company-auth`、`company-auth-channel`、`company-manage`、`company-admin-dashboard`（admin-dashboard）。
 
 所有持久化与业务挂载均使用 `./` 相对路径（数据落在 `company-docker` 下，便于统一管理）。
 
@@ -9,7 +9,7 @@
 | 路径 | 说明 |
 |------|------|
 | `docker-compose.yml` | 统一编排（在此目录执行 `docker compose`） |
-| `images/` | `company-auth` / `company-auth-channel` / `admin-dashboard` 镜像 Dockerfile |
+| `images/` | `company-auth` / `company-auth-channel` / `company-manage` / `admin-dashboard` 镜像 Dockerfile |
 | `init-db/` | Postgres 首次初始化脚本 |
 | `postgres/postgres_data/` | Postgres 数据（本地挂载，已 gitignore） |
 | `redis/redis-data/` | Redis 数据（本地挂载，已 gitignore） |
@@ -18,6 +18,7 @@
 | `auth/logs/` | auth 滚动日志（`prod` profile，`/var/log/auth`） |
 | `auth-channel/plugins/` | 渠道插件 JAR（发布升级写入） |
 | `auth-channel/logs/` | auth-channel 滚动日志（`/var/log/company-auth-channel`） |
+| `manage/logs/` | manage 滚动日志（`/var/log/company-manage`） |
 
 源码与 SQL 通过 `../` 相对路径引用；Java 与 admin-dashboard 镜像构建上下文均为上级 **company-parent** 根目录，Dockerfile 统一在 `company-docker/images/` 下。
 
@@ -39,9 +40,9 @@ cp -n .env.example .env   # 可选
 docker compose up -d --build
 ```
 
-首次会 Maven 打包 Java 服务（上下文为 `..`），耗时数分钟。
+首次会 Maven 打包 Java 服务（上下文为 `..`），耗时数分钟。构建使用 `company-docker/maven/settings.xml`（阿里云 Central 镜像）。
 
-`auth` / `auth-channel` 默认 `SPRING_PROFILES_ACTIVE=prod`，日志写入上述 `./auth/logs`、`./auth-channel/logs` 挂载目录（`prod` 仅写文件、不打控制台，可用 `tail -f auth/logs/auth.log` 查看）。
+`auth` / `auth-channel` / `manage` 默认 `SPRING_PROFILES_ACTIVE=prod`，业务日志写入对应 `./auth/logs`、`./auth-channel/logs`、`./manage/logs`；READY Banner 统一写 stdout，`docker compose logs` 可见。
 
 ## 端口与账号（默认）
 

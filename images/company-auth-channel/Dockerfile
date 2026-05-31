@@ -8,6 +8,7 @@ COPY company-base/pom.xml company-base/pom.xml
 COPY company-mq/pom.xml company-mq/pom.xml
 COPY company-auth/pom.xml company-auth/pom.xml
 COPY company-auth-channel/pom.xml company-auth-channel/pom.xml
+COPY company-manage/pom.xml company-manage/pom.xml
 
 COPY company-base/src company-base/src
 COPY company-mq/src company-mq/src

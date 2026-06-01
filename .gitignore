@@ -4,12 +4,17 @@ redis/redis-data/
 activemq-artemis/artemis-instance/
 activemq-artemis/artemis-data/
 auth/fail-insert/
-auth/logs/
 auth-channel/plugins/
+
+# 各服务运行时日志（Docker 挂载目录，含滚动归档）
+**/logs/
+manage/logs/
+auth/logs/
 auth-channel/logs/
 
 .DS_Store
 *.log
+*.log.gz
 *.tmp
 .env
 .env.local

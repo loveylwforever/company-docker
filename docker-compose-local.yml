@@ -1,0 +1,83 @@
+# 本地开发时的中间件启动合集
+
+name: company-stack-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: company-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TZ: Asia/Shanghai
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./postgres/postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+      - ../company-sql/postgres/schema-company-auth.sql:/schema/schema-company-auth.sql:ro
+      - ../company-sql/postgres/schema-company-manage-security.sql:/schema/schema-company-manage-security.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - company-net
+
+  redis:
+    image: redis:8.0-alpine
+    container_name: company-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
+    command: >
+      sh -c 'redis-server
+      --requirepass "$$REDIS_PASSWORD"
+      --appendonly yes
+      --save 60 100
+      --protected-mode no'
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./redis/redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - company-net
+
+  artemis:
+    image: apache/activemq-artemis:2.42.0-alpine
+    container_name: company-artemis
+    restart: unless-stopped
+    environment:
+      ARTEMIS_USER: ${MQ_USERNAME:-admin}
+      ARTEMIS_PASSWORD: ${MQ_PASSWORD:-Artemis@2026}
+      ARTEMIS_ROLE: admin
+      JAVA_OPTS: -Xms512m -Xmx1g -XX:+UseG1GC
+      TZ: Asia/Shanghai
+    ports:
+      - "${ARTEMIS_CONSOLE_PORT:-8161}:8161"
+      - "${ARTEMIS_CORE_PORT:-61616}:61616"
+      - "${ARTEMIS_AMQP_PORT:-5672}:5672"
+    volumes:
+      - ./activemq-artemis/artemis-instance:/var/lib/artemis-instance
+      - ./activemq-artemis/etc-override:/var/lib/artemis-instance/etc-override:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8161 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 45s
+    networks:
+      - company-net
+
+networks:
+  company-net:
+    driver: bridge

@@ -2,6 +2,8 @@
 
 在 **本目录** 一键构建并启动：Postgres、Redis、Artemis、`company-auth`、`company-auth-channel`、`company-manage`、`company-admin-dashboard`（admin-dashboard）。
 
+> **说明**：接口文档子模块 `company-auth-docs` 仅部署在 Vercel，已写入父仓库 `.dockerignore`，不参与本栈镜像构建。
+
 所有持久化与业务挂载均使用 `./` 相对路径（数据落在 `company-docker` 下，便于统一管理）。
 
 ## 目录结构

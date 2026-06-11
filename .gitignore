@@ -22,3 +22,5 @@ auth-channel/logs/
 # Build outputs（镜像构建在上级 company-parent）
 target/
 **/target/
+.fastRequest/
+logs/

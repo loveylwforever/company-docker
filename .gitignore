@@ -19,6 +19,9 @@ auth-channel/logs/
 .env
 .env.local
 
+# amd64 离线镜像包（build-push-amd64.sh 产出）
+dist/
+
 # Build outputs（镜像构建在上级 company-parent）
 target/
 **/target/

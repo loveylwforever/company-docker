@@ -10,7 +10,10 @@
 
 | 路径 | 说明 |
 |------|------|
-| `docker-compose.yml` | 统一编排（在此目录执行 `docker compose`） |
+| `docker-compose.yml` | 本地开发编排（自研镜像标签 `:local`） |
+| `docker-compose-amd64.yml` | 阿里云 amd64 发布编排（自研镜像标签 `:amd64`） |
+| `build-push-amd64.sh` | Mac 交叉编译 amd64 并导出离线 tar |
+| `dist/` | 离线镜像包输出目录（gitignore） |
 | `images/` | `company-auth` / `company-auth-channel` / `company-manage` / `admin-dashboard` 镜像 Dockerfile |
 | `init-db/` | Postgres 首次初始化脚本 |
 | `postgres/postgres_data/` | Postgres 数据（本地挂载，已 gitignore） |
@@ -73,6 +76,54 @@ docker compose down
 ```
 
 > 未使用 Docker 命名卷；数据均在 `./postgres/postgres_data`、`./redis/redis-data` 等目录。清空 DB 请删除对应目录后重新 `up`。
+
+## 阿里云 Intel（amd64）离线发布
+
+本地 Mac 开发用 `docker-compose.yml`，镜像标签 **`:local`**；发布到阿里云 x86 用 **`docker-compose-amd64.yml`**，标签 **`:amd64`**，两者互不覆盖。
+
+### Mac 上构建并打包
+
+```bash
+cd company-docker
+chmod +x build-push-amd64.sh   # 首次
+./build-push-amd64.sh
+```
+
+产出：
+
+- 镜像：`company-auth:amd64`、`company-auth-channel:amd64`、`company-manage:amd64`、`admin-dashboard:amd64`
+- 离线包：`dist/company-images-amd64-<时间戳>.tar`（软链 `dist/company-images-amd64-latest.tar`）
+
+可选环境变量：
+
+```bash
+# 构建内存不足时提高 admin-dashboard 构建堆
+NODE_HEAP_MB=3072 ./build-push-amd64.sh
+
+# 仅构建不打包
+./build-push-amd64.sh --no-save
+```
+
+### 阿里云 ECS 部署
+
+1. 将 `company-docker` 目录（含 `docker-compose-amd64.yml`、`.env`、`init-db` 等）与 tar 包传到服务器  
+2. 加载自研镜像并启动：
+
+```bash
+cd company-docker
+docker load -i dist/company-images-amd64-latest.tar
+cp -n .env.example .env   # 生产务必修改密码
+docker compose -f docker-compose-amd64.yml up -d
+```
+
+> **说明**：tar 仅含四个自研服务。Postgres / Redis / Artemis 首次 `up` 时从 Docker Hub 拉取 `linux/amd64` 官方镜像（需服务器能访问 Hub，或另行离线导入）。
+
+### 标签对照
+
+| 场景 | compose 文件 | 自研镜像标签 |
+|------|----------------|--------------|
+| 本机 Mac 验证 | `docker-compose.yml` | `:local` |
+| 阿里云 x86 发布 | `docker-compose-amd64.yml` | `:amd64` |
 
 ## Artemis 配置变更
 

@@ -14,8 +14,9 @@ RUN pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
 
 COPY company-admin-dashboard/ .
 
+ARG NODE_HEAP_MB=2048
 ENV NODE_ENV=production
-ENV NODE_OPTIONS=--max-old-space-size=4096
+ENV NODE_OPTIONS=--max-old-space-size=${NODE_HEAP_MB}
 RUN pnpm run build
 
 FROM node:22-alpine AS runtime

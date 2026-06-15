@@ -188,6 +188,7 @@ services:
       MANAGE_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
       MANAGE_REDIS_DATABASE: "1"
       SECURITY_DEV_INIT_ADMIN: "true"
+      AUTH_API_BASE: http://auth:8080
     ports:
       - "${COMPANY_MANAGE_PORT:-8088}:8088"
     volumes:

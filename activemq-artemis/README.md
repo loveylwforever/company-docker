@@ -42,6 +42,44 @@ docker compose up -d artemis
 
 本目录 `etc-override` 已同时配置 `roles="amq,admin"` 与 `artemis-roles.properties`。
 
+## 阿里云 / Linux：`The path '.' is not writable`
+
+日志类似：
+
+```text
+The path '.' is not writable.
+Usage: artemis help [<args>...]
+```
+
+**原因**：`artemis-instance/` 在 `.gitignore` 中，不会随仓库上传到服务器。首次 `docker compose up` 时 Docker 在宿主机创建空目录，属主多为 **root**；而官方镜像以非 root 用户（`2.42.0-alpine` 为 **UID 1001**）运行，无法在挂载点执行 `artemis create`，健康检查一直失败。
+
+**修复**（在 `company-docker` 目录）：
+
+```bash
+docker compose -f docker-compose-amd64.yml stop artemis
+
+# 若从未成功启动过，直接清空；若已有数据请自行备份
+rm -rf ./activemq-artemis/artemis-instance
+mkdir -p ./activemq-artemis/artemis-instance
+
+# 须与镜像内 artemis 用户一致（2.42.0-alpine 为 1001；换版本请先执行下方 id 命令确认）
+sudo chown -R 1001:1001 ./activemq-artemis/artemis-instance
+
+docker compose -f docker-compose-amd64.yml up -d artemis
+docker compose -f docker-compose-amd64.yml logs -f artemis
+```
+
+看到 `Artemis Message Broker ... started` 且 `docker compose ps` 中 artemis 为 `healthy` 即正常。
+
+**勿**从 Mac 拷贝本机 `artemis-instance/` 到 Linux 服务器（属主/路径易不一致）。服务器上应只带 `etc-override/`，由容器首次启动生成实例。
+
+确认 UID（换镜像版本时建议执行；须覆盖 entrypoint，否则 entrypoint 会跑 `artemis create` 而不是 `id`）：
+
+```bash
+docker run --rm --entrypoint id apache/activemq-artemis:2.42.0-alpine artemis
+# 示例输出：uid=1001(artemis) gid=1001(artemis) → chown 用 1001:1001
+```
+
 ## 与业务对齐
 
 - JMS：`tcp://127.0.0.1:61616`（容器内服务名 `artemis:61616`）

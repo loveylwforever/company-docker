@@ -188,7 +188,7 @@ services:
       MANAGE_REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
       MANAGE_REDIS_DATABASE: "1"
       SECURITY_DEV_INIT_ADMIN: "true"
-      AUTH_API_BASE: http://auth:8080
+      AUTH_API_BASE: ${AUTH_API_BASE:-http://auth:8080}
     ports:
       - "${COMPANY_MANAGE_PORT:-8088}:8088"
     volumes:
@@ -220,8 +220,8 @@ services:
       HOST: 0.0.0.0
       PORT: "3000"
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/company_auth
-      AUTH_API_BASE: http://auth:8080
-      CHANNEL_RELEASE_API_BASE: http://auth-channel:8090
+      AUTH_API_BASE: ${AUTH_API_BASE:-http://auth:8080}
+      CHANNEL_RELEASE_API_BASE: ${CHANNEL_RELEASE_API_BASE:-http://auth-channel:8090}
       MANAGE_API_BASE: http://manage:8088
       MANAGE_ENCRYPT_KEY: 1024lab__1024lab
     ports:

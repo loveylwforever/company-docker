@@ -142,16 +142,18 @@ done
 if [[ ${#SELECTED_SERVICES[@]} -eq 0 ]]; then
   SELECTED_SERVICES=("${ALL_SERVICES[@]}")
 else
-  # 去重并保持顺序（兼容 bash 3.2）
+  # 去重并保持顺序（兼容 bash 3.2；空数组在 set -u 下不可直接 "${arr[@]}" 展开）
   UNIQUE_SERVICES=()
   for svc in "${SELECTED_SERVICES[@]}"; do
     seen=0
-    for existing in "${UNIQUE_SERVICES[@]}"; do
-      if [[ "$existing" == "$svc" ]]; then
-        seen=1
-        break
-      fi
-    done
+    if ((${#UNIQUE_SERVICES[@]} > 0)); then
+      for existing in "${UNIQUE_SERVICES[@]}"; do
+        if [[ "$existing" == "$svc" ]]; then
+          seen=1
+          break
+        fi
+      done
+    fi
     if [[ "$seen" -eq 0 ]]; then
       UNIQUE_SERVICES+=("$svc")
     fi

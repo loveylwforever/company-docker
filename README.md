@@ -71,6 +71,10 @@ docker compose ps
 docker compose logs -f auth auth-channel admin-dashboard
 docker compose down
 
+# 管理后台改路由/渠道/卡 BIN 后，在服务器上立即刷新 auth 路由缓存（POST /tools/cache/refresh）
+./scripts/refresh-auth-route-cache.sh
+# 拆分部署时指定 auth 地址：AUTH_API_BASE=http://192.168.0.125:8080 ./scripts/refresh-auth-route-cache.sh
+
 # 停止并删除本地数据目录内容（需自行 rm 或清空 ./postgres/postgres_data 等）
 docker compose down
 ```

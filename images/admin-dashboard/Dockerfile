@@ -14,6 +14,9 @@ RUN pnpm install --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
 
 COPY company-admin-dashboard/ .
 
+# 字体文件须全局可读，避免 Nitro 以 node 用户运行时 403（历史上 DingTalk ttf 曾为 600）
+RUN chmod -R a+rX app/assets/fonts 2>/dev/null || true
+
 ARG NODE_HEAP_MB=2048
 ENV NODE_ENV=production
 ENV NODE_OPTIONS=--max-old-space-size=${NODE_HEAP_MB}

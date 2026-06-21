@@ -108,7 +108,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       SPRING_PROFILES_ACTIVE: ${AUTH_SPRING_PROFILES_ACTIVE:-prod}
-      LOGGING_FILE_PATH: /var/log/auth
+      LOGGING_FILE_PATH: /var/log/company-auth
       SERVER_PORT: "8080"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/company_auth
       SPRING_DATASOURCE_USERNAME: postgres
@@ -123,8 +123,8 @@ services:
     ports:
       - "${AUTH_PORT:-8080}:8080"
     volumes:
-      - ./auth/fail-insert:/var/lib/company-auth/fail-insert-trans-info
-      - ./auth/logs:/var/log/auth
+      - ./company-auth/fail-insert:/var/lib/company-auth/fail-insert-trans-info
+      - ./company-auth/logs:/var/log/company-auth
       - ../tools/channel-plugin:/opt/channel-plugin
     networks:
       - company-net
@@ -147,7 +147,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       SPRING_PROFILES_ACTIVE: ${CHANNEL_SPRING_PROFILES_ACTIVE:-prod}
-      LOGGING_FILE_PATH: /var/log/auth-channel
+      LOGGING_FILE_PATH: /var/log/company-auth-channel
       SERVER_PORT: "8090"
       CHANNEL_DB_URL: jdbc:postgresql://postgres:5432/company_auth
       CHANNEL_DB_USER: postgres
@@ -159,8 +159,8 @@ services:
     ports:
       - "${AUTH_CHANNEL_PORT:-8090}:8090"
     volumes:
-      - ./auth-channel/plugins:/data/plugins
-      - ./auth-channel/logs:/var/log/auth-channel
+      - ./company-auth-channel/plugins:/data/plugins
+      - ./company-auth-channel/logs:/var/log/company-auth-channel
     networks:
       - company-net
 
@@ -192,7 +192,7 @@ services:
     ports:
       - "${COMPANY_MANAGE_PORT:-8088}:8088"
     volumes:
-      - ./manage/logs:/var/log/company-manage
+      - ./company-manage/logs:/var/log/company-manage
     networks:
       - company-net
 

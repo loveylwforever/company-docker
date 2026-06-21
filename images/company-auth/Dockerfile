@@ -28,8 +28,8 @@ WORKDIR /app
 # channel-plugin generate.sh requires bash, zip, and file(1)
 RUN apk add --no-cache bash zip file \
   && addgroup -S app && adduser -S app -G app \
-  && mkdir -p /var/lib/company-auth/fail-insert-trans-info /var/log/auth/history \
-  && chown -R app:app /var/lib/company-auth /var/log/auth
+  && mkdir -p /var/lib/company-auth/fail-insert-trans-info /var/log/company-auth/history \
+  && chown -R app:app /var/lib/company-auth /var/log/company-auth
 
 COPY --from=build /build/company-auth/target/company-auth-1.0.0-exec.jar /app/app.jar
 

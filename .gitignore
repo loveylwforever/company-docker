@@ -3,14 +3,14 @@ postgres/postgres_data/
 redis/redis-data/
 activemq-artemis/artemis-instance/
 activemq-artemis/artemis-data/
-auth/fail-insert/
-auth-channel/plugins/
+company-auth/fail-insert/
+company-auth-channel/plugins/
 
 # 各服务运行时日志（Docker 挂载目录，含滚动归档）
 **/logs/
-manage/logs/
-auth/logs/
-auth-channel/logs/
+company-manage/logs/
+company-auth/logs/
+company-auth-channel/logs/
 
 .DS_Store
 *.log

@@ -27,8 +27,8 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S app && adduser -S app -G app \
-  && mkdir -p /data/plugins /var/log/company-auth-channel/history \
-  && chown -R app:app /data/plugins /var/log/company-auth-channel
+  && mkdir -p /data/plugins /var/log/auth-channel/history \
+  && chown -R app:app /data/plugins /var/log/auth-channel
 
 COPY --from=build /build/company-auth-channel/target/company-auth-channel-1.0.0-exec.jar /app/app.jar
 

@@ -147,7 +147,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       SPRING_PROFILES_ACTIVE: ${CHANNEL_SPRING_PROFILES_ACTIVE:-prod}
-      LOGGING_FILE_PATH: /var/log/company-auth-channel
+      LOGGING_FILE_PATH: /var/log/auth-channel
       SERVER_PORT: "8090"
       CHANNEL_DB_URL: jdbc:postgresql://postgres:5432/company_auth
       CHANNEL_DB_USER: postgres
@@ -160,7 +160,7 @@ services:
       - "${AUTH_CHANNEL_PORT:-8090}:8090"
     volumes:
       - ./auth-channel/plugins:/data/plugins
-      - ./auth-channel/logs:/var/log/company-auth-channel
+      - ./auth-channel/logs:/var/log/auth-channel
     networks:
       - company-net
 

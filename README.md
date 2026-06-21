@@ -22,7 +22,7 @@
 | `auth/fail-insert/` | auth 落库失败本地 SQL |
 | `auth/logs/` | auth 滚动日志（`prod` profile，`/var/log/auth`） |
 | `auth-channel/plugins/` | 渠道插件 JAR（发布升级写入） |
-| `auth-channel/logs/` | auth-channel 滚动日志（`/var/log/company-auth-channel`） |
+| `auth-channel/logs/` | auth-channel 滚动日志（`/var/log/auth-channel`，主文件 `auth-channel.log`） |
 | `manage/logs/` | manage 滚动日志（`/var/log/company-manage`） |
 
 源码与 SQL 通过 `../` 相对路径引用；Java 与 admin-dashboard 镜像构建上下文均为上级 **company-parent** 根目录，Dockerfile 统一在 `company-docker/images/` 下。
@@ -47,7 +47,7 @@ docker compose up -d --build
 
 首次会 Maven 打包 Java 服务（上下文为 `..`），耗时数分钟。构建使用 `company-docker/maven/settings.xml`（阿里云 Central 镜像）。
 
-`auth` / `auth-channel` / `manage` 默认 `SPRING_PROFILES_ACTIVE=prod`，业务日志写入对应 `./auth/logs`、`./auth-channel/logs`、`./manage/logs`；READY Banner 统一写 stdout，`docker compose logs` 可见。
+`auth` / `auth-channel` / `manage` 默认 `SPRING_PROFILES_ACTIVE=prod`，业务日志同时写 stdout 与 `./auth/logs` 等目录（格式一致）；`docker compose logs` 与文件内容对齐。
 
 ## 端口与账号（默认）
 
@@ -397,7 +397,7 @@ docker run --rm --network company-docker_company-net redis:8.0-alpine \
 
 > 网络名以 `docker network ls` 为准（compose 项目名 + `_company-net`）。
 
-若仍见 Logback 的 `CONSOLE not referenced` / `Missing watchable`，请重建 `company-auth` 镜像（`logback-spring.xml` 已关闭 scan 且 prod 不注册 CONSOLE appender）。
+若仍见 Logback 的 `Missing watchable`，请重建镜像（`logback-spring.xml` 已 `scan=false`）。各环境日志格式统一，由 `application-logging.yml` 按 profile 区分级别。
 
 ### 管理台接口 500 / `127.0.0.1` / `fetch failed`
 

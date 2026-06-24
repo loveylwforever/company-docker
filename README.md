@@ -81,6 +81,80 @@ docker compose down
 
 > 未使用 Docker 命名卷；数据均在 `./postgres/postgres_data`、`./redis/redis-data` 等目录。清空 DB 请删除对应目录后重新 `up`。
 
+## 滚动更新与优雅停机（auth / auth-channel）
+
+`auth` ↔ `auth-channel` 走 MQ 同步请求-应答（`auth` `put` 后阻塞等 `*_ret`，`worker` `take` → 调渠道 → `ret`）。**朴素地 `docker compose up -d` 重建会丢/失败在途交易**：旧实例被打断时在途请求拿不到应答、worker 处理一半被杀、甚至 auth 超时放弃后 worker 仍真实调一次渠道（孤儿调用/重复扣费）。
+
+下面的机制已内置，正常重启即生效，无需额外操作：
+
+| 机制 | 位置 | 作用 |
+|------|------|------|
+| Spring 优雅停机 | 两服务 `application.yml`：`server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase: 12s` | 收到 SIGTERM 先停收新 HTTP，等在途请求跑完再销毁 bean |
+| docker 宽限期 | `stop_grace_period: ${MQ_STOP_GRACE_PERIOD:-15s}`（两 compose） | SIGTERM 后等待上限；**排空即提前返回，不会拖慢正常重启**，故设 > MQ 超时 |
+| worker 快速感知停机 | `ArtemisManyNodeBroadcast.take()` 用 `receive(1000)` 轮询 | 停机后秒级退出消费循环，不再无限阻塞 |
+| worker 排空在途 | `MqWorker.shutdown()`：等 `processing` 归零再关 JMS（上限 9+3+2s） | 已出队请求走完 `ret` 才断连接 |
+| 防孤儿调用（P2） | `Message.deadlineAtMs`：auth 发送前置 now+超时；worker 出队后若已过期则跳过渠道调用 | auth 已放弃就不再真实调渠道，杜绝重复扣费 |
+
+**时间链必须满足**（改 DB 里的 `SL_MQ_TIMEOUT_MS` 时同步调整）：
+
+```
+docker stop_grace_period (15s) > spring timeout-per-shutdown-phase (12s) ≈ MQ 超时 (10s) + 缓冲
+worker 内部排空 9+3+2 = 14s < stop_grace_period (15s)
+```
+
+`stop_grace_period` 是 docker 静态字段，**读不到应用缓存的 `SL_MQ_TIMEOUT_MS`**；用 `.env` 的 `MQ_STOP_GRACE_PERIOD` 单点维护，改超时时一并调大。
+
+### 重启步骤
+
+> **必须同时重建 auth 与 channel**：二者共用 `com.company.auth.dto.Message`，改字段后 Java 默认 `serialVersionUID` 会变；只更新一边会触发 `local class incompatible`（日志已有明确提示）。先 `mvn clean install` 两模块，再按下序重启。
+
+```bash
+cd company-docker
+
+# 1) 先更新 channel（消费端），确认起来并在消费
+docker compose up -d --build auth-channel
+docker compose logs -f auth-channel   # 看到消费就绪后再继续
+
+# 2) 再更新 auth（客户端）
+docker compose up -d --build auth
+```
+
+### 验证日志
+
+```bash
+# 优雅停机走通（停机时）
+docker compose logs auth-channel | grep "MQ worker shutdown complete"
+# P2 拦截了 auth 已放弃的请求（出现即说明孤儿调用被挡下）
+docker compose logs auth-channel | grep "mq-channel-skip-expired"
+```
+
+### 残留空窗与彻底零丢失
+
+单实例下"先停后起"仍有一个**启动空窗**（新实例就绪前的几秒，新请求会失败/超时）。被影响的只是这几秒的新交易，可当网络抖动解释。**要彻底零丢失需每服务跑 ≥2 副本滚动**（去掉 `container_name`、用 `deploy.replicas` + 多消费者/网关），一个在跑另一个再换。
+
+> 仅重启 auth/channel、不动 artemis 容器时，队列里的在途消息不丢（NON_PERSISTENT 留在 broker 内存）；**勿在交易高峰重启 artemis**。
+
+## JVM 内存与 CPU（2c4g 专机）
+
+**适用场景**：auth + auth-channel **单独**部署在一台 **2 核 4GB** ECS，Postgres / Redis / Artemis 在其它机器。
+
+| 服务 | `mem_limit` | `cpus` | 堆（约） | 角色 |
+|------|-------------|--------|----------|------|
+| auth | 1g | 0.75 | ~716 MB | HTTP 网关、路由内存索引、MQ `put`、Redis |
+| auth-channel | 2560m | 1.25 | ~1.9 GB | MQ `take`、渠道插件、消费线程 |
+
+**估算依据**（不是越大越好）：
+
+- **auth**：路由/应答码已预加载进堆，单笔交易热路径 ~20ms，716MB 堆足够 Tomcat + Redisson + MQ 连接池；再大只增加 GC 扫描成本。
+- **auth-channel**：堆主要给**渠道插件 ClassLoader**（Metaspace 另限 384MB）和并发 `Message` 对象；40 个消费线程在 2 核上反而上下文切换过多，amd64 编排默认 **`MQ_CONSUMER_THREADS=16`**。
+- **OS 预留 ~512MB**：两容器合计 3.5GB + OS ≈ 4GB，留少量缓冲给 page cache。
+
+`JAVA_TOOL_OPTIONS` 使用 `MaxRAMPercentage`，堆上限按 **容器 `mem_limit`** 计算，不会误读宿主机 4GB。参数见 `.env.example`。
+
+**健康检查**：三 Java 服务均暴露轻量 `GET /tools/ping`（channel 为 `/tools/channel/ping`），compose `depends_on: service_healthy` 与镜像 `HEALTHCHECK` 已对齐。
+
+**本机全栈开发**（同一台 Mac 还跑 postgres/redis/artemis/manage/dashboard）：请在 `.env` 调小 `AUTH_MEM_LIMIT` / `CHANNEL_MEM_LIMIT`，或临时去掉 `mem_limit` 行，避免 4GB 笔记本 OOM。
+
 ## 阿里云 Intel（amd64）离线发布
 
 本地 Mac 开发用 `docker-compose.yml`，镜像标签 **`:local`**；发布到阿里云 x86 用 **`docker-compose-amd64.yml`**，标签 **`:amd64`**，两者互不覆盖。
@@ -148,6 +222,8 @@ docker compose up -d artemis
 ## 管理台（admin-dashboard）
 
 浏览器只访问 **http://127.0.0.1:3000**；Nitro 再按前缀转发（详见 [company-admin-dashboard/README.md](../company-admin-dashboard/README.md)）。
+
+运行镜像为 **`gcr.io/distroless/nodejs22-debian12:nonroot`**：仍是完整 Node 22 运行时，Nitro `.output` 行为一致；区别是无 shell/`apk`（不能 `docker exec -it … sh`），`HEALTHCHECK` 用内置 `healthcheck.mjs` 探活。镜像构建阶段使用 `node:22-bookworm-slim`（仅 build，不进最终镜像）。
 
 ### 容器环境变量 → BFF 前缀
 
@@ -398,6 +474,28 @@ docker run --rm --network company-docker_company-net redis:8.0-alpine \
 > 网络名以 `docker network ls` 为准（compose 项目名 + `_company-net`）。
 
 若仍见 Logback 的 `Missing watchable`，请重建镜像（`logback-spring.xml` 已 `scan=false`）。各环境日志格式统一，由 `application-logging.yml` 按 profile 区分级别。
+
+### Docker build `short read` / `unexpected EOF`（多见于 admin-dashboard）
+
+`FROM node:22-bookworm-slim`（build 阶段）或拉取 `gcr.io/distroless/...`（运行层）时报 `short read: expected … bytes but got 0`，通常是 **基础镜像层下载中断** 或 **BuildKit 缓存损坏**，不是 Dockerfile 语法问题。
+
+```bash
+# 1) 清理构建缓存后重试
+docker builder prune -f
+
+# 2) 先单独拉齐基础镜像（Mac 交叉 amd64 时加 --platform）
+docker pull --platform=linux/amd64 node:22-bookworm-slim
+docker pull --platform=linux/amd64 gcr.io/distroless/nodejs22-debian12:nonroot
+
+# 3) 不要一次并行 build 四个服务时，可先只 build 失败的那个
+cd company-docker
+DOCKER_BUILDKIT=1 docker compose -f docker-compose-amd64.yml build admin-dashboard
+
+# 4) 或用脚本（已内置预拉取）
+./build-push-amd64.sh admin-dashboard
+```
+
+仍失败时：检查 Docker Desktop 磁盘空间、重启 Docker Desktop，或配置 Docker Hub / gcr.io 镜像加速。
 
 ### 管理台接口 500 / `127.0.0.1` / `fetch failed`
 

@@ -25,8 +25,8 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# channel-plugin generate.sh requires bash, zip, and file(1)
-RUN apk add --no-cache bash zip file \
+# channel-plugin generate.sh requires bash, zip, and file(1); wget for HEALTHCHECK
+RUN apk add --no-cache bash zip file wget \
   && addgroup -S app && adduser -S app -G app \
   && mkdir -p /var/lib/company-auth/fail-insert-trans-info /var/log/company-auth/history \
   && chown -R app:app /var/lib/company-auth /var/log/company-auth
@@ -35,5 +35,8 @@ COPY --from=build /build/company-auth/target/company-auth-1.0.0-exec.jar /app/ap
 
 USER app
 EXPOSE 8080
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=90s \
+  CMD wget -qO- http://127.0.0.1:8080/tools/ping >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # 构建上下文：company-parent 根目录（见 docker-compose.yml build.context）
-# 运行镜像仅含 Nitro .output，无需 node_modules（已移除 xlsx 等运行时外部依赖）
-FROM node:22-alpine AS build
+# 运行镜像仅含 Nitro .output（distroless）；构建阶段用 bookworm-slim（与 distroless debian 同系，不用 alpine）
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@11.2.2 --activate
 
@@ -22,20 +22,22 @@ ENV NODE_ENV=production
 ENV NODE_OPTIONS=--max-old-space-size=${NODE_HEAP_MB}
 RUN pnpm run build
 
-FROM node:22-alpine AS runtime
+# 运行层：distroless 仅含 Node 运行时 + .output，无 shell/apk，攻击面更小
+FROM gcr.io/distroless/nodejs22-debian12:nonroot
 WORKDIR /app
-RUN apk add --no-cache wget
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV NITRO_PORT=3000
 
-COPY --from=build /app/.output ./.output
+COPY --from=build --chown=nonroot:nonroot /app/.output ./.output
+COPY --chown=nonroot:nonroot company-docker/images/admin-dashboard/healthcheck.mjs ./healthcheck.mjs
 
 EXPOSE 3000
 
+# distroless 无 wget；ENTRYPOINT 已是 node，HEALTHCHECK 须写全路径（见镜像内 /nodejs/bin/node）
 HEALTHCHECK --interval=15s --timeout=5s --retries=8 --start-period=30s \
-  CMD wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1
+  CMD ["/nodejs/bin/node", "/app/healthcheck.mjs"]
 
-CMD ["node", ".output/server/index.mjs"]
+CMD ["/app/.output/server/index.mjs"]

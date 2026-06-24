@@ -26,7 +26,8 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S app -G app \
+RUN apk add --no-cache wget \
+  && addgroup -S app && adduser -S app -G app \
   && mkdir -p /data/plugins /var/log/company-auth-channel/history \
   && chown -R app:app /data/plugins /var/log/company-auth-channel
 
@@ -34,5 +35,8 @@ COPY --from=build /build/company-auth-channel/target/company-auth-channel-1.0.0-
 
 USER app
 EXPOSE 8090
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=90s \
+  CMD wget -qO- http://127.0.0.1:8090/tools/channel/ping >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -24,12 +24,16 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S app -G app \
+RUN apk add --no-cache wget \
+  && addgroup -S app && adduser -S app -G app \
   && mkdir -p /var/log/company-manage/history \
   && chown -R app:app /var/log/company-manage
 
 COPY --from=build /build/company-manage/target/company-manage-1.0.0-exec.jar /app/app.jar
 USER app
 EXPOSE 8088
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=90s \
+  CMD wget -qO- http://127.0.0.1:8088/tools/ping >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

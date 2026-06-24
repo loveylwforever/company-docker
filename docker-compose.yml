@@ -89,6 +89,12 @@ services:
     image: company-auth:local
     container_name: company-auth
     restart: unless-stopped
+    # 优雅停机宽限期：必须 >= 应用优雅停机耗时(>= MQ reply-timeout-ms 10s + 缓冲)。
+    # 它是"最长等待上限"，在途请求排空后会立即停，不会拖慢正常重启。改 SL_MQ_TIMEOUT_MS 时同步调大此值。
+    stop_grace_period: ${MQ_STOP_GRACE_PERIOD:-15s}
+    # 2c4g 专机（仅 auth+channel）：1g 限额 → MaxRAMPercentage=70 约 716MB 堆，够路由缓存+MQ+Redis
+    mem_limit: ${AUTH_MEM_LIMIT:-1g}
+    cpus: ${AUTH_CPUS:-0.75}
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,6 +117,13 @@ services:
       COMPANY_AUTH_MQ_PASSWORD: ${MQ_PASSWORD:-Artemis@2026}
       FAIL_INSERT_TRANS_INFO_DIR: /var/lib/company-auth/fail-insert-trans-info
       CHANNEL_PLUGIN_HOME: /opt/channel-plugin
+      JAVA_TOOL_OPTIONS: ${AUTH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=40 -XX:+ExitOnOutOfMemoryError}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/tools/ping >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     ports:
       - "${AUTH_PORT:-8080}:8080"
     volumes:
@@ -127,13 +140,18 @@ services:
     image: company-auth-channel:local
     container_name: company-auth-channel
     restart: unless-stopped
+    # 同 auth：宽限期需覆盖 worker 排空已出队请求 + 关 JMS 的总耗时（MqWorker 内部上限 < 此值）
+    stop_grace_period: ${MQ_STOP_GRACE_PERIOD:-15s}
+    # 2c4g 专机：2.5g 限额 → MaxRAMPercentage=75 约 1.9GB 堆，供插件 ClassLoader + 消费线程
+    mem_limit: ${CHANNEL_MEM_LIMIT:-2560m}
+    cpus: ${CHANNEL_CPUS:-1.25}
     depends_on:
       postgres:
         condition: service_healthy
       artemis:
         condition: service_healthy
       auth:
-        condition: service_started
+        condition: service_healthy
     environment:
       TZ: Asia/Shanghai
       SPRING_PROFILES_ACTIVE: ${CHANNEL_SPRING_PROFILES_ACTIVE:-prod}
@@ -146,6 +164,13 @@ services:
       MQ_USERNAME: ${MQ_USERNAME:-admin}
       MQ_PASSWORD: ${MQ_PASSWORD:-Artemis@2026}
       CHANNEL_PLUGIN_ARTIFACT_BASE_DIR: /data/plugins
+      JAVA_TOOL_OPTIONS: ${CHANNEL_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75 -XX:InitialRAMPercentage=50 -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=384m}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8090/tools/channel/ping >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     ports:
       - "${AUTH_CHANNEL_PORT:-8090}:8090"
     volumes:
@@ -161,6 +186,8 @@ services:
     image: company-manage:local
     container_name: company-manage
     restart: unless-stopped
+    mem_limit: ${MANAGE_MEM_LIMIT:-768m}
+    cpus: ${MANAGE_CPUS:-0.5}
     depends_on:
       postgres:
         condition: service_healthy
@@ -178,6 +205,13 @@ services:
       MANAGE_REDIS_DATABASE: "1"
       SECURITY_DEV_INIT_ADMIN: "true"
       AUTH_API_BASE: ${AUTH_API_BASE:-http://auth:8080}
+      JAVA_TOOL_OPTIONS: ${MANAGE_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=40 -XX:+ExitOnOutOfMemoryError}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8088/tools/ping >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
     ports:
       - "${COMPANY_MANAGE_PORT:-8088}:8088"
     volumes:
@@ -198,11 +232,11 @@ services:
       postgres:
         condition: service_healthy
       auth:
-        condition: service_started
+        condition: service_healthy
       auth-channel:
-        condition: service_started
+        condition: service_healthy
       manage:
-        condition: service_started
+        condition: service_healthy
     environment:
       TZ: Asia/Shanghai
       HOST: 0.0.0.0

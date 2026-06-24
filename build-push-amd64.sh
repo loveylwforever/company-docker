@@ -197,8 +197,39 @@ export NODE_HEAP_MB
 
 cd "$SCRIPT_DIR"
 
+# Java 服务基础镜像（始终预拉）
+JAVA_BASE_IMAGES=(
+  "maven:3.9-eclipse-temurin-21-alpine"
+  "eclipse-temurin:21-jre-alpine"
+)
+echo "==> 预拉取 Java 基础镜像..."
+for base in "${JAVA_BASE_IMAGES[@]}"; do
+  echo "    pull $base ($PLATFORM) ..."
+  if ! docker pull --platform="$PLATFORM" "$base"; then
+    echo "警告: 预拉取 $base 失败，build 将继续尝试" >&2
+  fi
+done
+
+# admin-dashboard：运行层 distroless；构建阶段 bookworm-slim（无 node:22-alpine）
+needs_dashboard=0
+for svc in "${SELECTED_SERVICES[@]}"; do
+  if [[ "$svc" == "admin-dashboard" ]]; then
+    needs_dashboard=1
+    break
+  fi
+done
+if [[ "$needs_dashboard" -eq 1 ]]; then
+  echo "==> 预拉取 admin-dashboard 基础镜像..."
+  for base in "node:22-bookworm-slim" "gcr.io/distroless/nodejs22-debian12:nonroot"; do
+    echo "    pull $base ($PLATFORM) ..."
+    if ! docker pull --platform="$PLATFORM" "$base"; then
+      echo "警告: 预拉取 $base 失败，build 将继续尝试" >&2
+    fi
+  done
+fi
+
 echo "==> docker compose build ${SERVICE_LIST%/} ..."
-docker compose -f "$COMPOSE_FILE" build "${SELECTED_SERVICES[@]}"
+DOCKER_BUILDKIT=1 docker compose -f "$COMPOSE_FILE" build "${SELECTED_SERVICES[@]}"
 
 echo "==> 校验镜像架构..."
 for img in "${APP_IMAGES[@]}"; do
